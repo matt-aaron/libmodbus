@@ -175,6 +175,10 @@ static int send_msg(modbus_t *ctx, uint8_t *msg, int msg_length)
         printf("\n");
     }
 
+    if (ctx->raw_request_monitor) {
+        ctx->raw_request_monitor(msg, msg_length);
+    }
+
     /* In recovery mode, the write command will be issued until to be
        successful! Disabled by default. */
     do {
@@ -517,6 +521,10 @@ int _modbus_receive_msg(modbus_t *ctx, uint8_t *msg, msg_type_t msg_type)
 
     if (ctx->debug)
         printf("\n");
+
+    if (ctx->raw_response_monitor != NULL) {
+        ctx->raw_response_monitor(msg, msg_length);
+    }
 
     return ctx->backend->check_integrity(ctx, msg, msg_length);
 }
@@ -1713,6 +1721,28 @@ void _modbus_init_common(modbus_t *ctx)
 
     ctx->indication_timeout.tv_sec = 0;
     ctx->indication_timeout.tv_usec = 0;
+}
+
+int modbus_set_raw_request_monitor(modbus_t *ctx, modbus_raw_monitor_handler *handler)
+{
+    if (ctx == NULL) {
+        errno = EINVAL;
+        return -1;
+    }
+
+    ctx->raw_request_monitor = handler;
+    return 0;
+}
+
+int modbus_set_raw_response_monitor(modbus_t *ctx, modbus_raw_monitor_handler *handler)
+{
+    if (ctx == NULL) {
+        errno = EINVAL;
+        return -1;
+    }
+
+    ctx->raw_response_monitor = handler;
+    return 0;
 }
 
 /* Define the slave number */

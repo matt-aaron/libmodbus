@@ -184,6 +184,12 @@ typedef enum {
     MODBUS_QUIRK_ALL = 0xFF
 } modbus_quirks;
 
+typedef void modbus_raw_monitor_handler(uint8_t *msg, int msg_length);
+MODBUS_API int modbus_set_raw_request_monitor(modbus_t *ctx,
+                                              modbus_raw_monitor_handler *handler);
+MODBUS_API int modbus_set_raw_response_monitor(modbus_t *ctx,
+                                               modbus_raw_monitor_handler *handler);
+
 MODBUS_API int modbus_set_slave(modbus_t *ctx, int slave);
 MODBUS_API int modbus_get_slave(modbus_t *ctx);
 MODBUS_API int modbus_set_error_recovery(modbus_t *ctx,
