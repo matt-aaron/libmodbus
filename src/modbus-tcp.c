@@ -230,7 +230,7 @@ static int _modbus_tcp_set_ipv4_options(int s)
     /* Set the TCP no delay flag */
     /* SOL_TCP = IPPROTO_TCP */
     option = 1;
-    rc = setsockopt(s, IPPROTO_TCP, TCP_NODELAY, (const void *) &option, sizeof(int));
+    rc = setsockopt(s, IPPROTO_TCP, TCP_NODELAY, &option, sizeof(int));
     if (rc == -1) {
         return -1;
     }
@@ -258,7 +258,7 @@ static int _modbus_tcp_set_ipv4_options(int s)
      **/
     /* Set the IP low delay option */
     option = IPTOS_LOWDELAY;
-    rc = setsockopt(s, IPPROTO_IP, IP_TOS, (const void *) &option, sizeof(int));
+    rc = setsockopt(s, IPPROTO_IP, IP_TOS, &option, sizeof(int));
     if (rc == -1) {
         return -1;
     }
@@ -293,8 +293,14 @@ static int _connect(int sockfd,
         FD_ZERO(&wset);
         FD_SET(sockfd, &wset);
         rc = select(sockfd + 1, NULL, &wset, NULL, &tv);
-        if (rc <= 0) {
-            /* Timeout or fail */
+        if (rc < 0) {
+            /* Fail */
+            return -1;
+        }
+
+        if (rc == 0) {
+            /* Timeout */
+            errno = ETIMEDOUT;
             return -1;
         }
 
@@ -401,7 +407,11 @@ static int _modbus_tcp_pi_connect(modbus_t *ctx)
     rc = getaddrinfo(ctx_tcp_pi->node, ctx_tcp_pi->service, &ai_hints, &ai_list);
     if (rc != 0) {
         if (ctx->debug) {
+#ifdef HAVE_GAI_STRERROR
             fprintf(stderr, "Error returned by getaddrinfo: %s\n", gai_strerror(rc));
+#else
+            fprintf(stderr, "Error returned by getaddrinfo: %d\n", rc);
+#endif
         }
         freeaddrinfo(ai_list);
         errno = ECONNREFUSED;
@@ -537,8 +547,7 @@ int modbus_tcp_listen(modbus_t *ctx, int nb_connection)
     }
 
     enable = 1;
-    if (setsockopt(new_s, SOL_SOCKET, SO_REUSEADDR, (char *) &enable, sizeof(enable)) ==
-        -1) {
+    if (setsockopt(new_s, SOL_SOCKET, SO_REUSEADDR, &enable, sizeof(enable)) == -1) {
         close(new_s);
         return -1;
     }
@@ -627,7 +636,11 @@ int modbus_tcp_pi_listen(modbus_t *ctx, int nb_connection)
     rc = getaddrinfo(node, service, &ai_hints, &ai_list);
     if (rc != 0) {
         if (ctx->debug) {
+#ifdef HAVE_GAI_STRERROR
             fprintf(stderr, "Error returned by getaddrinfo: %s\n", gai_strerror(rc));
+#else
+            fprintf(stderr, "Error returned by getaddrinfo: %d\n", rc);
+#endif
         }
         freeaddrinfo(ai_list);
         errno = ECONNREFUSED;
@@ -651,8 +664,7 @@ int modbus_tcp_pi_listen(modbus_t *ctx, int nb_connection)
             continue;
         } else {
             int enable = 1;
-            rc =
-                setsockopt(s, SOL_SOCKET, SO_REUSEADDR, (void *) &enable, sizeof(enable));
+            rc = setsockopt(s, SOL_SOCKET, SO_REUSEADDR, &enable, sizeof(enable));
             if (rc != 0) {
                 close(s);
                 if (ctx->debug) {

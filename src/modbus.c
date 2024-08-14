@@ -224,7 +224,10 @@ static int send_msg(modbus_t *ctx, uint8_t *msg, int msg_length)
     return rc;
 }
 
-int modbus_send_raw_request(modbus_t *ctx, const uint8_t *raw_req, int raw_req_length)
+int modbus_send_raw_request_tid(modbus_t *ctx,
+                                const uint8_t *raw_req,
+                                int raw_req_length,
+                                int tid)
 {
     sft_t sft;
     uint8_t req[MAX_MESSAGE_LENGTH];
@@ -246,7 +249,7 @@ int modbus_send_raw_request(modbus_t *ctx, const uint8_t *raw_req, int raw_req_l
     sft.slave = raw_req[0];
     sft.function = raw_req[1];
     /* The t_id is left to zero */
-    sft.t_id = 0;
+    sft.t_id = tid;
     /* This response function only set the header so it's convenient here */
     req_length = ctx->backend->build_response_basis(&sft, req);
 
@@ -257,6 +260,11 @@ int modbus_send_raw_request(modbus_t *ctx, const uint8_t *raw_req, int raw_req_l
     }
 
     return send_msg(ctx, req, req_length);
+}
+
+int modbus_send_raw_request(modbus_t *ctx, const uint8_t *raw_req, int raw_req_length)
+{
+    return modbus_send_raw_request_tid(ctx, raw_req, raw_req_length, 0);
 }
 
 /*
@@ -448,7 +456,6 @@ int _modbus_receive_msg(modbus_t *ctx, uint8_t *msg, msg_type_t msg_type)
 #ifdef _WIN32
             wsa_err = WSAGetLastError();
             if ((ctx->error_recovery & MODBUS_ERROR_RECOVERY_LINK) &&
-                (ctx->backend->backend_type == _MODBUS_BACKEND_TYPE_TCP) &&
                 (wsa_err == WSAENOTCONN || wsa_err == WSAENETRESET ||
                  wsa_err == WSAENOTSOCK || wsa_err == WSAESHUTDOWN ||
                  wsa_err == WSAECONNABORTED || wsa_err == WSAETIMEDOUT ||
@@ -458,7 +465,6 @@ int _modbus_receive_msg(modbus_t *ctx, uint8_t *msg, msg_type_t msg_type)
             }
 #else
             if ((ctx->error_recovery & MODBUS_ERROR_RECOVERY_LINK) &&
-                (ctx->backend->backend_type == _MODBUS_BACKEND_TYPE_TCP) &&
                 (errno == ECONNRESET || errno == ECONNREFUSED || errno == EBADF)) {
                 int saved_errno = errno;
                 modbus_close(ctx);
@@ -1061,7 +1067,7 @@ int modbus_reply(modbus_t *ctx,
             uint16_t and = (req[offset + 3] << 8) + req[offset + 4];
             uint16_t or = (req[offset + 5] << 8) + req[offset + 6];
 
-            data = (data & and) | (or &(~and));
+            data = (data & and) | (or &(~and) );
             mb_mapping->tab_registers[mapping_address] = data;
             memcpy(rsp, req, req_length);
             rsp_length = req_length;
@@ -1196,6 +1202,7 @@ static int read_io_status(modbus_t *ctx, int function, int addr, int nb, uint8_t
         int pos = 0;
         unsigned int offset;
         unsigned int offset_end;
+        unsigned int i;
 
         rc = _modbus_receive_msg(ctx, rsp, MSG_CONFIRMATION);
         if (rc == -1)
@@ -1207,7 +1214,7 @@ static int read_io_status(modbus_t *ctx, int function, int addr, int nb, uint8_t
 
         offset = ctx->backend->header_length + 2;
         offset_end = offset + rc;
-        for (unsigned int i = offset; i < offset_end; i++) {
+        for (i = offset; i < offset_end; i++) {
             /* Shift reg hi_byte to temp */
             temp = rsp[i];
 
@@ -1362,10 +1369,12 @@ int modbus_read_input_registers(modbus_t *ctx, int addr, int nb, uint16_t *dest)
     }
 
     if (nb > MODBUS_MAX_READ_REGISTERS) {
-        fprintf(stderr,
-                "ERROR Too many input registers requested (%d > %d)\n",
-                nb,
-                MODBUS_MAX_READ_REGISTERS);
+        if (ctx->debug) {
+            fprintf(stderr,
+                    "ERROR Too many input registers requested (%d > %d)\n",
+                    nb,
+                    MODBUS_MAX_READ_REGISTERS);
+        }
         errno = EMBMDATA;
         return -1;
     }

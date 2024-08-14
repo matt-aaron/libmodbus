@@ -59,6 +59,7 @@ AC_CANONICAL_HOST
 os_win32="false"
 os_cygwin="false"
 os_qnx="false"
+os_sunos="false"
 case "${host_os}" in
       *mingw32*)
     os_win32="true"
@@ -68,6 +69,9 @@ case "${host_os}" in
   ;;
       *cygwin*)
     os_cygwin="true"
+  ;;
+      *solaris*)
+    os_sunos="true"
   ;;
 esac
 AM_CONDITIONAL(OS_WIN32, test "$os_win32" = "true")
@@ -85,6 +89,7 @@ AC_CHECK_HEADERS([ \
     linux/serial.h \
     netdb.h \
     netinet/in.h \
+    netinet/ip.h \
     netinet/tcp.h \
     sys/ioctl.h \
     sys/params.h \
@@ -104,7 +109,7 @@ AC_CHECK_DECLS([__CYGWIN__])
 AC_SEARCH_LIBS(accept, network socket)
 
 # Checks for library functions.
-AC_CHECK_FUNCS([accept4 getaddrinfo gettimeofday inet_pton inet_ntop select socket strerror strlcpy])
+AC_CHECK_FUNCS([accept4 gai_strerror getaddrinfo gettimeofday inet_pton inet_ntop select socket strerror strlcpy])
 
 # Required for MinGW with GCC v4.8.1 on Win7
 AC_DEFINE(WINVER, 0x0501, _)
@@ -130,6 +135,11 @@ if test "$os_cygwin" = "false"; then
         LIBS="$LIBS -lws2_32"
     AC_SUBST(LIBS)
     fi
+fi
+
+if test "$os_sunos" = "true"; then
+    LIBS="$LIBS -lnsl -lsocket"
+    AC_SUBST(LIBS)
 fi
 
 # Check for RS485 support (Linux kernel version 2.6.28+)
